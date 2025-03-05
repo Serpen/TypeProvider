@@ -97,7 +97,7 @@ public class TypeProvider : NavigationCmdletProvider
                 .Order();
             foreach (var ns in rootNs)
             {
-                WriteItemObject(new Namespace(ns), ns, true);
+                WriteItemObject(new NamespaceType(ns), ns, true);
                 if (recurse)
                     GetChildItems(".\\" + ns, recurse, depth - 1);
             }
@@ -108,7 +108,7 @@ public class TypeProvider : NavigationCmdletProvider
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNativePath(path) + ".") && (ns.Count(s => s == '.') == (toNativePath(path) + ".").Count(s => s == '.'))).Order())
             {
-                WriteItemObject(new Namespace(ns.Replace(toNativePath(path) + '.', "")), ns.Replace('.', '\\'), true);
+                WriteItemObject(new NamespaceType(ns), ns.Replace('.', '\\'), true);
                 if (recurse)
                     GetChildItems(".\\" + ns, recurse, --depth);
             }
@@ -127,14 +127,14 @@ public class TypeProvider : NavigationCmdletProvider
                 .Distinct()
                 .Order();
             foreach (var ns in rootNs)
-                WriteItemObject(new Namespace(ns), ns, true);
+                WriteItemObject(new NamespaceType(ns), ns, true);
             foreach (var item in GetTypes(path))
                 WriteItemObject(item, item.Name, false);
         }
         else
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNativePath(path))))
-                WriteItemObject(new Namespace(ns.Replace(toNativePath(path) + '.', "")), ns.Replace(toNativePath(path) + '.', ""), true);
+                WriteItemObject(new NamespaceType(ns.Replace(toNativePath(path) + '.', "")), ns.Replace(toNativePath(path) + '.', ""), true);
             foreach (var item in GetTypes(path))
                 WriteItemObject(item, item.Name, false);
         }

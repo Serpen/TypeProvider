@@ -6,10 +6,13 @@
     <Name>package</Name>
     <ViewSelectedBy>
       <TypeName>System.RuntimeType</TypeName>
-      <TypeName>Namespace</TypeName>
+      <TypeName>NamespaceType</TypeName>
     </ViewSelectedBy>
     <TableControl>
       <TableHeaders>
+        <TableColumnHeader>
+          <Width>30</Width>
+        </TableColumnHeader>
         <TableColumnHeader>
           <Width>30</Width>
         </TableColumnHeader>
@@ -21,6 +24,9 @@
           <TableColumnItems>
             <TableColumnItem>
               <PropertyName>Name</PropertyName>
+            </TableColumnItem>
+            <TableColumnItem>
+              <PropertyName>Namespace</PropertyName>
             </TableColumnItem>
             <TableColumnItem>
               <PropertyName>MemberType</PropertyName>

@@ -1,17 +1,37 @@
 
-public class Namespace
+public class NamespaceType
 {
-    internal Namespace(string ns)
+    internal NamespaceType(string ns)
     {
-        Name = ns;
+        FullName = ns;
     }
 
-    public string Name { get; }
+    public readonly string FullName;
+    public string Name
+    {
+        get
+        {
+            if (!FullName.Contains('.'))
+                return FullName;
+            else
+                return FullName.Substring(FullName.LastIndexOf('.')+1);
+        }
+    }
 
+    public string Namespace
+    {
+        get
+        {
+            if (!FullName.Contains('.'))
+                return "";
+            else
+                return FullName.Substring(0, FullName.LastIndexOf('.'));
+        }
+    }
     public string MemberType { get; } = "NamespaceInfo";
 
     public override string ToString()
     {
-        return Name;
+        return FullName;
     }
 }
