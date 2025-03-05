@@ -45,7 +45,7 @@ public class TypeProvider : NavigationCmdletProvider
     }
 
     public AppDomain? AppDomain;
-    static readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssembly = [];
+    static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssembly = [];
 
     private void generateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {

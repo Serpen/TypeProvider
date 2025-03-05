@@ -1,12 +1,13 @@
+using System.Collections.Generic;
+
+namespace Serpen.PS;
 
 public class NamespaceType
 {
-    internal NamespaceType(string ns)
-    {
-        FullName = ns;
-    }
+    internal NamespaceType(string ns) => FullName = ns;
 
     public readonly string FullName;
+    
     public string Name
     {
         get
@@ -14,7 +15,7 @@ public class NamespaceType
             if (!FullName.Contains('.'))
                 return FullName;
             else
-                return FullName.Substring(FullName.LastIndexOf('.')+1);
+                return FullName.Substring(FullName.LastIndexOf('.') + 1);
         }
     }
 
@@ -30,8 +31,8 @@ public class NamespaceType
     }
     public string MemberType { get; } = "NamespaceInfo";
 
-    public override string ToString()
-    {
-        return FullName;
-    }
+    public IEnumerable<System.Reflection.Assembly> Assemblies
+        => TypeProvider.NamespacesInAssembly[FullName];
+
+    public override string ToString() => FullName;
 }
