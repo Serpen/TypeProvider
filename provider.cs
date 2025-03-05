@@ -5,11 +5,12 @@ using System.Management.Automation.Provider;
 using System.Reflection;
 using System;
 
+namespace Serpen.PS;
+
 [CmdletProvider("TypeProvider", ProviderCapabilities.None)]
 public class TypeProvider : NavigationCmdletProvider
 {
-    public override char ItemSeparator => '.';
-    public override char AltItemSeparator => '.';
+
     protected override object NewDriveDynamicParameters()
     {
         var paramDict = new RuntimeDefinedParameterDictionary();
@@ -43,6 +44,9 @@ public class TypeProvider : NavigationCmdletProvider
         return base.NewDrive(drive);
     }
 
+    public AppDomain? AppDomain;
+    static readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssembly = [];
+
     private void generateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
         assemblies ??= this.AppDomain!.GetAssemblies();
@@ -58,7 +62,6 @@ public class TypeProvider : NavigationCmdletProvider
                     ns2.Add(ass);
                 else
                     NamespacesInAssembly.Add(ns, [ass]);
-
         }
     }
 
@@ -67,7 +70,6 @@ public class TypeProvider : NavigationCmdletProvider
         generateNamespaces([args.LoadedAssembly]);
     }
 
-    AppDomain? AppDomain;
 
     protected override bool IsItemContainer(string path)
     {
@@ -86,37 +88,72 @@ public class TypeProvider : NavigationCmdletProvider
 
     protected override void GetChildItems(string path, bool recurse, uint depth)
     {
-        if (path == ".\\")
+        if (path == ".\\" || path == "")
         {
-            var rootNs = NamespacesInAssembly.Keys.DistinctBy(a => a.Substring(0, a.IndexOf('.') == -1 ? a.Length : a.IndexOf('.'))).Order();
+            var rootNs = NamespacesInAssembly.Keys
+                .Where(n => !String.IsNullOrEmpty(n))
+                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
+                .Distinct()
+                .Order();
             foreach (var ns in rootNs)
-                WriteItemObject(new Namespace(ns), path + "\\" + ns.Replace('.', '\\'), true);
+            {
+                WriteItemObject(new Namespace(ns), ns, true);
+                if (recurse)
+                    GetChildItems(".\\" + ns, recurse, depth - 1);
+            }
+            foreach (var item in GetTypes(path))
+                WriteItemObject(item, item.FullName, false);
         }
         else
         {
-            foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNativePath(path))))
-                WriteItemObject(new Namespace(ns.Replace(toNativePath(path) + '.', "")), path, true);
+            foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNativePath(path) + ".") && (ns.Count(s => s == '.') == (toNativePath(path) + ".").Count(s => s == '.'))).Order())
+            {
+                WriteItemObject(new Namespace(ns.Replace(toNativePath(path) + '.', "")), ns.Replace('.', '\\'), true);
+                if (recurse)
+                    GetChildItems(".\\" + ns, recurse, --depth);
+            }
             foreach (var item in GetTypes(path))
-                WriteItemObject(item, path, false);
+                WriteItemObject(item, item.FullName, false);
         }
     }
 
     protected override void GetChildNames(string path, ReturnContainers returnContainers)
     {
-        this.GetChildItems(path, false, 1);
+        if (path == ".\\" || path.Length == 0)
+        {
+            var rootNs = NamespacesInAssembly.Keys
+                .Where(n => !String.IsNullOrEmpty(n))
+                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
+                .Distinct()
+                .Order();
+            foreach (var ns in rootNs)
+                WriteItemObject(new Namespace(ns), ns, true);
+            foreach (var item in GetTypes(path))
+                WriteItemObject(item, item.Name, false);
+        }
+        else
+        {
+            foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNativePath(path))))
+                WriteItemObject(new Namespace(ns.Replace(toNativePath(path) + '.', "")), ns.Replace(toNativePath(path) + '.', ""), true);
+            foreach (var item in GetTypes(path))
+                WriteItemObject(item, item.Name, false);
+        }
     }
 
 
-    protected override string GetChildName(string path) {
-        return path.Substring(path.LastIndexOf('.'));
-    } 
+    protected override string GetChildName(string path)
+    {
+        return path; //.Substring(path.LastIndexOf('.'));
+    }
 
     IEnumerable<Type> GetTypes(string path)
     {
         string ns = toNativePath(path);
         if (NamespacesInAssembly.TryGetValue(ns, out var relAss))
-            // var relAss = NamespacesInAssembly[ns];
-            return relAss.SelectMany(a => a.GetExportedTypes().Where(t => t.Namespace == ns)).OrderBy(t => t.Name);
+            return relAss
+                .SelectMany(a => a.GetExportedTypes()
+                .Where(t => t.Namespace == ns || ns == "" && t.Namespace == null))
+                .OrderBy(t => t.Name);
         else
             return System.Array.Empty<Type>();
     }
@@ -148,5 +185,4 @@ public class TypeProvider : NavigationCmdletProvider
         return true;
     }
 
-    private readonly static Dictionary<string, List<Assembly>> NamespacesInAssembly = [];
 }
