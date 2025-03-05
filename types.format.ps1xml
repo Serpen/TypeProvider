@@ -6,7 +6,7 @@
     <Name>package</Name>
     <ViewSelectedBy>
       <TypeName>System.RuntimeType</TypeName>
-      <TypeName>NamespaceType</TypeName>
+      <TypeName>Serpen.PS.NamespaceType</TypeName>
     </ViewSelectedBy>
     <TableControl>
       <TableHeaders>

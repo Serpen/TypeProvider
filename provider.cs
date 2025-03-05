@@ -37,9 +37,9 @@ public class TypeProvider : NavigationCmdletProvider
         else
             this.AppDomain = AppDomain.CurrentDomain;
 
-        this.AppDomain.AssemblyLoad += onLoadAssembly;
-
         generateNamespaces();
+
+        this.AppDomain.AssemblyLoad += onLoadAssembly;
 
         return base.NewDrive(drive);
     }
@@ -49,6 +49,7 @@ public class TypeProvider : NavigationCmdletProvider
 
     private void generateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         assemblies ??= this.AppDomain!.GetAssemblies();
         foreach (var ass in assemblies)
         {
@@ -63,10 +64,12 @@ public class TypeProvider : NavigationCmdletProvider
                 else
                     NamespacesInAssembly.Add(ns, [ass]);
         }
+        WriteWarning($"generateNamespaces took {sw.ElapsedMilliseconds}");
     }
 
     private void onLoadAssembly(object? sender, AssemblyLoadEventArgs args)
     {
+        WriteVerbose("LoadAssembly:" + args.LoadedAssembly.GetName().Name);
         generateNamespaces([args.LoadedAssembly]);
     }
 
@@ -170,9 +173,9 @@ public class TypeProvider : NavigationCmdletProvider
     protected override void GetItem(string path)
     {
         if (IsItemContainer(path))
-            WriteItemObject($"Item: {path}", path, true);
+            WriteItemObject(new NamespaceType(path), path, true);
         else
-            WriteItemObject($"Item: {Type.GetType(toNativePath(path))}", path, false);
+            WriteItemObject(Type.GetType(toNativePath(path)), path, false);
     }
 
     protected override bool HasChildItems(string path)
