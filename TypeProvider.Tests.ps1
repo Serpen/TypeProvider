@@ -53,4 +53,11 @@ namespace Alibaba1234 {
     It "Root should contain namespaces" {
         dir types: | Measure-Object | select -ExpandProperty Count | Should -BeGreaterThan 0
     }
+
+    It "ForeignAssembly Type" {
+        gi types:\System\Net\HttpStatusCode | should -not -BeNullOrEmpty
+    }
+    It "ForeignAssembly non existing Type" {
+        {gi types:\System\Net\HttpStatusCodeAlibaba -ErrorAction Stop} | should -throw
+    }
 }

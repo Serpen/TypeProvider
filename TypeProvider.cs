@@ -1,14 +1,16 @@
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Management.Automation.Provider;
 using System.Reflection;
 using System;
+using System.Text;
 
 namespace Serpen.PS;
 
 [CmdletProvider("TypeProvider", ProviderCapabilities.None)]
-public class TypeProvider : NavigationCmdletProvider
+public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 {
 
     private const string ParamAppDomain = "PowerShellAppDomain";
@@ -23,7 +25,7 @@ public class TypeProvider : NavigationCmdletProvider
             if (dicparam.TryGetValue(ParamAppDomain, out var appdomain))
                 if (appdomain?.Value is AppDomain appDomain)
                     AppDomain = appDomain;
-            
+
         AppDomain ??= AppDomain.CurrentDomain;
 
         GenerateNamespaces();
@@ -166,9 +168,29 @@ public class TypeProvider : NavigationCmdletProvider
     {
         if (NamespacesInAssembly.ContainsKey(toNamespacePath(path)))
             return true;
-        if (Type.GetType(toNamespacePath(path), false) != null)
+        
+        if (FindType(path) != null)
             return true;
         return false;
+    }
+
+    // Only Types within same assembly can be found by nameonly
+    // Searching the Namespaces Assembly List for that name
+    Type FindType(string path)
+    {
+        Type? retType = Type.GetType(toNamespacePath(path), false, true);
+
+        if (retType == null)
+        {
+            var parentNs = toNamespacePath(GetParentPath(path, ""));
+            if (NamespacesInAssembly.TryGetValue(parentNs, out var asslist))
+            {
+                retType = asslist
+                    .SelectMany(a => a.GetExportedTypes())
+                    .FirstOrDefault(t => t.FullName == toNamespacePath(path));
+            }
+        }
+        return retType;
     }
 
     protected override void GetItem(string path)
@@ -176,7 +198,7 @@ public class TypeProvider : NavigationCmdletProvider
         if (IsItemContainer(path))
             WriteItemObject(new NamespaceType(path), path, true);
         else
-            WriteItemObject(Type.GetType(toNamespacePath(path)), path, false);
+            WriteItemObject(FindType(path), path, false);
     }
 
     protected override bool HasChildItems(string path)
@@ -189,4 +211,119 @@ public class TypeProvider : NavigationCmdletProvider
         return true;
     }
 
+    public void GetProperty(string path, Collection<string>? providerSpecificPickList)
+    {
+        if (!IsItemContainer(path))
+        {
+            var t = FindType(path);
+
+            var propertyResults = new PSObject();
+            var dicMemDef = new OrderedDictionary<string, List<string>>();
+            foreach (var mem in
+                t!.GetMembers()
+                    // .DistinctBy(m => m.Name)
+                    .Where(m => providerSpecificPickList == null
+                        || providerSpecificPickList.Count == 0
+                        || providerSpecificPickList.Contains("*")
+                        || providerSpecificPickList.Contains(m.Name))
+                    .OrderBy(m => m.Name)
+            )
+            {
+                if (dicMemDef.TryGetValue(mem.Name, out var defs))
+                    defs.Add(MemberDefinition(mem));
+                else
+                    dicMemDef.Add(mem.Name, [MemberDefinition(mem)]);
+            }
+            foreach (var mem in dicMemDef)
+                propertyResults.Properties.Add(new PSNoteProperty(mem.Key, mem.Value));
+            WritePropertyObject(propertyResults, path);
+        }
+    }
+
+    private string MemberDefinition(MemberInfo mem)
+    {
+        var sb = new StringBuilder();
+        if (mem is MethodInfo metInfo)
+        {
+            sb.Append(GetTypeAccelerated(metInfo.ReturnType));
+            sb.Append(' ');
+            sb.Append(mem.Name);
+            sb.Append('(');
+            sb.Append(String.Join(',', metInfo.GetParameters()
+                .Select(p => $"{GetTypeAccelerated(p.ParameterType)} {p.Name}")));
+            sb.Append(')');
+        }
+        else if (mem is PropertyInfo propInfo)
+        {
+            sb.Append(GetTypeAccelerated(propInfo.PropertyType));
+            sb.Append(' ');
+            sb.Append(mem.Name);
+        }
+        else if (mem is ConstructorInfo conInfo)
+        {
+            sb.Append("new(");
+            sb.Append(String.Join(',', conInfo.GetParameters()
+                .Select(p => $"{GetTypeAccelerated(p.ParameterType)} {p.Name}")));
+            sb.Append(')');
+        }
+        else
+        {
+            sb.Append(mem.Name);
+        }
+        return sb.ToString();
+    }
+
+    static Lazy<Dictionary<Type, string>> TypeAccelerators = new(() =>
+    {
+        Type TypeAccelerators = typeof(PSObject).Assembly.GetType("System.Management.Automation.TypeAccelerators");
+        var GetProp = TypeAccelerators.GetProperty("Get");
+        var getgetMethod = GetProp.GetGetMethod();
+        var dicUnknown = getgetMethod.Invoke(null, null);
+        Dictionary<string, Type> dic = (Dictionary<string, Type>)dicUnknown; //  TypeAccelerators.InvokeMember("get_Get", BindingFlags.Static | BindingFlags.InvokeMethod, null, null, null);
+
+        Dictionary<Type, string> ret = new();
+        foreach (var typ in dic)
+            try
+            {
+                ret.Add(typ.Value, typ.Key);
+            }
+            catch { }
+        return ret;
+    }
+
+    );
+
+    string GetTypeAccelerated(Type typ)
+    {
+        //[psobject].assembly.gettype("System.Management.Automation.TypeAccelerators")::Get
+        if (TypeAccelerators.Value.TryGetValue(typ, out var retstring))
+            return retstring;
+        else
+            return typ.ToString();
+    }
+
+    public object? GetPropertyDynamicParameters(string path, Collection<string>? providerSpecificPickList)
+    {
+        return null;
+    }
+
+    public void SetProperty(string path, PSObject propertyValue)
+    {
+        throw new NotImplementedException();
+    }
+
+    public object? SetPropertyDynamicParameters(string path, PSObject propertyValue)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void ClearProperty(string path, Collection<string> propertyToClear)
+    {
+        throw new NotImplementedException();
+    }
+
+    public object? ClearPropertyDynamicParameters(string path, Collection<string> propertyToClear)
+    {
+        throw new NotImplementedException();
+    }
 }
