@@ -13,32 +13,20 @@ public class TypeProvider : NavigationCmdletProvider
 
     private const string ParamAppDomain = "PowerShellAppDomain";
     protected override object NewDriveDynamicParameters()
-    {
-        var paramDict = new RuntimeDefinedParameterDictionary();
+        => new RuntimeDefinedParameterDictionary() {
+            {ParamAppDomain,
+            new RuntimeDefinedParameter(ParamAppDomain, typeof(AppDomain), [new ParameterAttribute() { Mandatory = true }])}};
 
-        var param = new RuntimeDefinedParameter(
-            ParamAppDomain, // Parametername
-            typeof(AppDomain), // Typ des Parameters
-            [new ParameterAttribute() { Mandatory = true }]
-        );
-
-        paramDict.Add(ParamAppDomain, param);
-        return paramDict;
-    }
     protected override PSDriveInfo NewDrive(PSDriveInfo drive)
     {
-        if (DynamicParameters is RuntimeDefinedParameterDictionary dp)
-        {
-            dp.TryGetValue(ParamAppDomain, out var appdomain);
-            if (appdomain?.Value is AppDomain appDomain)
-                AppDomain = appDomain;
-            else
-                AppDomain = AppDomain.CurrentDomain;
-        }
-        else
-            AppDomain = AppDomain.CurrentDomain;
+        if (DynamicParameters is RuntimeDefinedParameterDictionary dicparam)
+            if (dicparam.TryGetValue(ParamAppDomain, out var appdomain))
+                if (appdomain?.Value is AppDomain appDomain)
+                    AppDomain = appDomain;
+            
+        AppDomain ??= AppDomain.CurrentDomain;
 
-        generateNamespaces();
+        GenerateNamespaces();
 
         AppDomain.AssemblyLoad += onLoadAssembly;
 
@@ -50,10 +38,11 @@ public class TypeProvider : NavigationCmdletProvider
     static AppDomain? AppDomain;
     static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssembly = [];
 
-    private void generateNamespaces(IEnumerable<Assembly>? assemblies = null)
+    private void GenerateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         assemblies ??= AppDomain!.GetAssemblies();
+
         foreach (var ass in assemblies)
         {
             var asns = new List<string>();
@@ -71,7 +60,8 @@ public class TypeProvider : NavigationCmdletProvider
                 else
                     NamespacesInAssembly.Add(ns, [ass]);
         }
-        WriteWarning($"generateNamespaces took {sw.ElapsedMilliseconds}");
+        sw.Stop();
+        // WriteWarning($"generateNamespaces took {sw.ElapsedMilliseconds}");
     }
 
     IEnumerable<string> getNsParts(string ns)
@@ -85,12 +75,12 @@ public class TypeProvider : NavigationCmdletProvider
     private void onLoadAssembly(object? sender, AssemblyLoadEventArgs args)
     {
         WriteVerbose("LoadAssembly:" + args.LoadedAssembly.GetName().Name);
-        generateNamespaces([args.LoadedAssembly]);
+        GenerateNamespaces([args.LoadedAssembly]);
     }
 
     private string toNamespacePath(string path)
     {
-        return path.Replace('\\', '.').TrimEnd('.');
+        return path.Replace(base.ItemSeparator, '.').TrimEnd('.');
     }
 
     #endregion
@@ -123,7 +113,7 @@ public class TypeProvider : NavigationCmdletProvider
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order())
             {
-                WriteItemObject(new NamespaceType(ns), ns.Replace('.', '\\'), true);
+                WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
                 if (recurse)
                     GetChildItems(ns, recurse);
             }
@@ -142,14 +132,14 @@ public class TypeProvider : NavigationCmdletProvider
                 .Distinct()
                 .Order();
             foreach (var ns in rootNs)
-                WriteItemObject(new NamespaceType(ns), ns, true);
+                WriteItemObject(new NamespaceType(ns).Name, ns, true);
             foreach (var item in GetTypes(path))
-                WriteItemObject(item, item.Name, false);
+                WriteItemObject(item.Name, item.Name, false);
         }
         else
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path))))
-                WriteItemObject(new NamespaceType(ns.Replace(toNamespacePath(path) + '.', "")), ns.Replace(toNamespacePath(path) + '.', ""), true);
+                WriteItemObject(new NamespaceType(ns.Replace(toNamespacePath(path) + '.', "")).Name, ns.Replace(toNamespacePath(path) + '.', ""), true);
             foreach (var item in GetTypes(path))
                 WriteItemObject(item.Name, item.Name, false);
         }
