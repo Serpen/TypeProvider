@@ -104,12 +104,12 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                 .Order();
             foreach (var ns in rootNs)
             {
-                WriteItemObject(new NamespaceType(ns), ns, true);
+                WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
                 if (recurse)
                     GetChildItems(ns, recurse);
             }
             foreach (var item in GetTypes(path))
-                WriteItemObject(item, item.FullName, false);
+                WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
         }
         else
         {
@@ -120,7 +120,7 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                     GetChildItems(ns, recurse);
             }
             foreach (var item in GetTypes(path))
-                WriteItemObject(item, item.FullName, false);
+                WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
         }
     }
 
