@@ -5,6 +5,7 @@
   <View>
     <Name>package</Name>
     <ViewSelectedBy>
+      <TypeName>System.Type</TypeName>
       <TypeName>System.RuntimeType</TypeName>
       <TypeName>Serpen.PS.NamespaceType</TypeName>
     </ViewSelectedBy>
@@ -17,6 +18,7 @@
           <Width>30</Width>
         </TableColumnHeader>
         <TableColumnHeader>
+          <Label>MemberType</Label>
         </TableColumnHeader>
       </TableHeaders>
       <TableRowEntries>
@@ -29,7 +31,36 @@
               <PropertyName>Namespace</PropertyName>
             </TableColumnItem>
             <TableColumnItem>
-              <PropertyName>MemberType</PropertyName>
+              <ScriptBlock>
+                if ($_ -is [Serpen.PS.NamespaceType]) {
+                  return 'Namespace'
+                } elseif ($_.BaseType?.Name -eq 'Enum') {
+                  return 'Enum'
+                } elseif ($_.get_IsInterface()) {
+                  return 'Interface'
+                } elseif ($_.get_IsGenericType()) {
+                  if ($_.get_IsValueType()) {
+                    return 'ValueType&lt;&gt;'
+                  } else {
+                    return 'Type&lt;&gt;' 
+                  }
+                } elseif ($_.IsSubclassOf([System.Exception])) {
+                  return 'Exception'
+                } elseif ($_.IsSubclassOf([System.Attribute])) {
+                  return 'Attribute'
+                } elseif ($_ -is [System.Exception]) {
+                  return 'Exception'
+                } elseif ($_.get_IsPrimitive()) {
+                  return 'Primitive'
+                } elseif ($_.get_IsValueType()) {
+                  return 'ValueType'
+                } elseif ($_ -is [System.Attribute]) {
+                  return 'Attribute'
+                } else {
+                  return 'Type'
+                }
+              </ScriptBlock>
+              <!-- <PropertyName>MemberType</PropertyName> -->
             </TableColumnItem>
           </TableColumnItems>
         </TableRowEntry>

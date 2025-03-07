@@ -49,11 +49,15 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
         {
             var asns = new List<string>();
             foreach (var typ in ass.GetExportedTypes())
+            {
+                if (Stopping) return;
                 if (!asns.Contains(typ.Namespace ?? ""))
                     foreach (var nsPart in getNsParts(typ.Namespace ?? ""))
                         asns.Add(nsPart);
+            }
 
-            foreach (var ns in asns)
+            foreach (var ns in asns) {
+                if (Stopping) return;
                 if (NamespacesInAssembly.TryGetValue(ns, out var ns2))
                 {
                     if (!ns2.Contains(ass))
@@ -61,6 +65,7 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                 }
                 else
                     NamespacesInAssembly.Add(ns, [ass]);
+            }
         }
         sw.Stop();
         // WriteWarning($"generateNamespaces took {sw.ElapsedMilliseconds}");
@@ -104,23 +109,31 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                 .Order();
             foreach (var ns in rootNs)
             {
+                if (Stopping) return;
                 WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
                 if (recurse)
                     GetChildItems(ns, recurse);
             }
             foreach (var item in GetTypes(path))
+            {
+                if (Stopping) return;
                 WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
+            }
         }
         else
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order())
             {
+                if (Stopping) return;
                 WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
                 if (recurse)
                     GetChildItems(ns, recurse);
             }
             foreach (var item in GetTypes(path))
+            {
+                if (Stopping) return;
                 WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
+            }
         }
     }
 
@@ -134,31 +147,46 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                 .Distinct()
                 .Order();
             foreach (var ns in rootNs)
+            {
+                if (Stopping) return;
                 WriteItemObject(new NamespaceType(ns).Name, ns, true);
+            }
             foreach (var item in GetTypes(path))
+            {
+                if (Stopping) return;
                 WriteItemObject(item.Name, item.Name, false);
+            }
         }
         else
         {
             foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path))))
+            {
+                if (Stopping) return;
                 WriteItemObject(new NamespaceType(ns.Replace(toNamespacePath(path) + '.', "")).Name, ns.Replace(toNamespacePath(path) + '.', ""), true);
+            }
             foreach (var item in GetTypes(path))
+            {
+                if (Stopping) return;
                 WriteItemObject(item.Name, item.Name, false);
+            }
         }
     }
 
     protected override string GetChildName(string path)
     {
-        return base.GetChildName(path);
+        if (path != "")
+            return base.GetChildName(path);
+        return "";
     }
 
     IEnumerable<Type> GetTypes(string path)
     {
         string ns = toNamespacePath(path);
         if (NamespacesInAssembly.TryGetValue(ns, out var relAss))
-            return relAss
-                .SelectMany(a => a.GetExportedTypes()
-                .Where(t => t.Namespace == ns || ns == "" && t.Namespace == null))
+            return new List<Assembly>(relAss)
+                .SelectMany(a => this.Force ? a.GetTypes() : a.GetExportedTypes())
+                // .ToArray()
+                .Where(t => t.Namespace == ns || ns == "" && t.Namespace == null)
                 .OrderBy(t => t.Name);
         else
             return System.Array.Empty<Type>();
@@ -168,7 +196,7 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
     {
         if (NamespacesInAssembly.ContainsKey(toNamespacePath(path)))
             return true;
-        
+
         if (FindType(path) != null)
             return true;
         return false;
@@ -176,18 +204,18 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 
     // Only Types within same assembly can be found by nameonly
     // Searching the Namespaces Assembly List for that name
-    Type FindType(string path)
+    Type FindType(string pspath)
     {
-        Type? retType = Type.GetType(toNamespacePath(path), false, true);
+        Type? retType = Type.GetType(toNamespacePath(pspath), false, true);
 
         if (retType == null)
         {
-            var parentNs = toNamespacePath(GetParentPath(path, ""));
+            var parentNs = toNamespacePath(GetParentPath(pspath, ""));
             if (NamespacesInAssembly.TryGetValue(parentNs, out var asslist))
             {
                 retType = asslist
                     .SelectMany(a => a.GetExportedTypes())
-                    .FirstOrDefault(t => t.FullName == toNamespacePath(path));
+                    .FirstOrDefault(t => t.FullName == toNamespacePath(pspath));
             }
         }
         return retType;
@@ -211,6 +239,29 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
         return true;
     }
 
+    #region Invoke Constructor
+
+    protected override void InvokeDefaultAction(string path)
+    {
+        object[] argArray = [];
+        var typ = FindType(path);
+        if (DynamicParameters is RuntimeDefinedParameterDictionary dicparam)
+            if (dicparam.TryGetValue("Arguments", out var args))
+                argArray = args?.Value as object[];
+
+        var instance = System.Activator.CreateInstance(typ, argArray);
+        this.WriteItemObject(instance, path, false);
+    }
+
+    protected override object InvokeDefaultActionDynamicParameters(string path)
+    => new RuntimeDefinedParameterDictionary() {
+            {"Arguments",
+            new RuntimeDefinedParameter("Arguments", typeof(object[]), [new ParameterAttribute() {Position=0, HelpMessage = "Constructor Arguments"} ])}};
+
+    #endregion
+
+    #region Property
+
     public void GetProperty(string path, Collection<string>? providerSpecificPickList)
     {
         if (!IsItemContainer(path))
@@ -229,6 +280,7 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                     .OrderBy(m => m.Name)
             )
             {
+                if (Stopping) return;
                 if (dicMemDef.TryGetValue(mem.Name, out var defs))
                     defs.Add(MemberDefinition(mem));
                 else
@@ -314,7 +366,7 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 
     public object? SetPropertyDynamicParameters(string path, PSObject propertyValue)
     {
-        throw new NotImplementedException();
+        return null;
     }
 
     public void ClearProperty(string path, Collection<string> propertyToClear)
@@ -324,6 +376,8 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 
     public object? ClearPropertyDynamicParameters(string path, Collection<string> propertyToClear)
     {
-        throw new NotImplementedException();
+        return null;
     }
+
+    #endregion
 }
