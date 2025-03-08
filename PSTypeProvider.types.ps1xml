@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- *******************************************************************
+These sample files contain formatting information used by the Windows 
+PowerShell engine. Do not edit or change the contents of this file 
+directly. Please see the Windows PowerShell documentation or type 
+Get-Help Update-TypeData for more information.
+
+Copyright (c) Microsoft Corporation.  All rights reserved.
+ 
+THIS SAMPLE CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY 
+OF ANY KIND,WHETHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO 
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A PARTICULAR
+PURPOSE. IF THIS CODE AND INFORMATION IS MODIFIED, THE ENTIRE RISK OF USE
+OR RESULTS IN CONNECTION WITH THE USE OF THIS CODE AND INFORMATION 
+REMAINS WITH THE USER.
+******************************************************************** -->
+
+<Types>
+  <Type>
+    <Name>System.Type</Name>
+    <Members>
+      <ScriptProperty>
+        <Name>TypeType</Name>
+        <GetScriptBlock>
+          if($true -or $this.Provider -is [Serpen.PS.TypeProvider])
+          {
+            if ($this.BaseType?.Name -eq 'Enum') {
+                return 'Enum'
+            } elseif ($this.get_IsInterface()) {
+                return 'Interface'
+            } elseif ($this.get_IsGenericType()) {
+                if ($this.get_IsValueType()) {
+                return 'ValueType&lt;&gt;'
+                } else {
+                return 'Type&lt;&gt;' 
+                }
+            } elseif ($this.IsSubclassOf([System.Exception]) -or $this -is [System.Exception]) {
+                return 'Exception'
+            } elseif ($this.IsSubclassOf([System.Attribute]) -or $this -is [System.Attribute]) {
+                return 'Attribute'
+            } elseif ($this.get_IsPrimitive()) {
+                return 'Primitive'
+            } elseif ($this.get_IsValueType()) {
+                return 'ValueType'
+            } else {
+                return 'Type'
+            }
+          }
+        </GetScriptBlock>
+      </ScriptProperty>
+    </Members>
+  </Type>
+</Types>

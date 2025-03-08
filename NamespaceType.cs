@@ -29,9 +29,9 @@ public class NamespaceType
                 return FullName.Substring(0, FullName.LastIndexOf('.'));
         }
     }
-    public string MemberType { get; } = "NamespaceInfo";
+    public string TypeType { get; } = "Namespace";
 
-    public IEnumerable<System.Reflection.Assembly> Assemblies
+    public IEnumerable<System.Reflection.Assembly> Assembly
         => TypeProvider.NamespacesInAssembly[FullName];
 
     public override string ToString() => FullName;

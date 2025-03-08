@@ -1,5 +1,6 @@
 Import-Module Pester
-Update-FormatData .\types.format.ps1xml
+Update-TypeData .\PSTypeProvider.types.ps1xml
+Update-FormatData .\PSTypeProvider.format.ps1xml
 Import-Module "./bin/Debug/net9.0/TypeProvider.dll"
 New-PSDrive -Name types -PSProvider TypeProvider -Root "" -pow ([System.AppDomain]::CurrentDomain)
 New-PSDrive -Name SystemIO -PSProvider TypeProvider -Root "System.IO" -pow ([System.AppDomain]::CurrentDomain)

@@ -10,23 +10,31 @@ using System.Text;
 namespace Serpen.PS;
 
 [CmdletProvider("TypeProvider", ProviderCapabilities.None)]
-public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
-{
 
-    private const string ParamAppDomain = "PowerShellAppDomain";
+[OutputType([typeof(NamespaceType), typeof(Type)], ProviderCmdlet = ProviderCmdlet.GetChildItem)]
+[OutputType([typeof(NamespaceType), typeof(Type)], ProviderCmdlet = ProviderCmdlet.GetItem)]
+[OutputType([typeof(object), typeof(Type)], ProviderCmdlet = ProviderCmdlet.InvokeItem)]
+
+[OutputType(typeof(NamespaceType), ProviderCmdlet = ProviderCmdlet.GetItem)]
+[OutputType(typeof(Type), ProviderCmdlet = ProviderCmdlet.GetItem)]
+public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
+{
     protected override object NewDriveDynamicParameters()
-        => new RuntimeDefinedParameterDictionary() {
-            {ParamAppDomain,
-            new RuntimeDefinedParameter(ParamAppDomain, typeof(AppDomain), [new ParameterAttribute() { Mandatory = true }])}};
+        => new NewDriveDynamicParameter();
 
     protected override PSDriveInfo NewDrive(PSDriveInfo drive)
     {
-        if (DynamicParameters is RuntimeDefinedParameterDictionary dicparam)
-            if (dicparam.TryGetValue(ParamAppDomain, out var appdomain))
-                if (appdomain?.Value is AppDomain appDomain)
-                    AppDomain = appDomain;
+        if (drive == null)
+            throw new ArgumentNullException(nameof(drive));
 
-        AppDomain ??= AppDomain.CurrentDomain;
+        if (drive.Root != "" && !IsItemContainer(drive.Root))
+            throw new DriveNotFoundException("Unable to create a drive with the specified root. The root path does not exist.");
+
+        if (DynamicParameters is NewDriveDynamicParameter newDriveDynamicParameter)
+            if (newDriveDynamicParameter.PowerShellAppDomain != null)
+                AppDomain = newDriveDynamicParameter.PowerShellAppDomain;
+
+        AppDomain = AppDomain.CurrentDomain;
 
         GenerateNamespaces();
 
@@ -56,7 +64,8 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
                         asns.Add(nsPart);
             }
 
-            foreach (var ns in asns) {
+            foreach (var ns in asns)
+            {
                 if (Stopping) return;
                 if (NamespacesInAssembly.TryGetValue(ns, out var ns2))
                 {
@@ -245,52 +254,19 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
     {
         object[] argArray = [];
         var typ = FindType(path);
-        if (DynamicParameters is RuntimeDefinedParameterDictionary dicparam)
-            if (dicparam.TryGetValue("Arguments", out var args))
-                argArray = args?.Value as object[];
+        if (DynamicParameters is InvokeDefaultActionDynamicParameter invokeParams)
+            argArray = invokeParams.Arguments ?? [];
 
         var instance = System.Activator.CreateInstance(typ, argArray);
         this.WriteItemObject(instance, path, false);
     }
 
     protected override object InvokeDefaultActionDynamicParameters(string path)
-    => new RuntimeDefinedParameterDictionary() {
-            {"Arguments",
-            new RuntimeDefinedParameter("Arguments", typeof(object[]), [new ParameterAttribute() {Position=0, HelpMessage = "Constructor Arguments"} ])}};
+    => new InvokeDefaultActionDynamicParameter();
 
     #endregion
 
     #region Property
-
-    public void GetProperty(string path, Collection<string>? providerSpecificPickList)
-    {
-        if (!IsItemContainer(path))
-        {
-            var t = FindType(path);
-
-            var propertyResults = new PSObject();
-            var dicMemDef = new OrderedDictionary<string, List<string>>();
-            foreach (var mem in
-                t!.GetMembers()
-                    // .DistinctBy(m => m.Name)
-                    .Where(m => providerSpecificPickList == null
-                        || providerSpecificPickList.Count == 0
-                        || providerSpecificPickList.Contains("*")
-                        || providerSpecificPickList.Contains(m.Name))
-                    .OrderBy(m => m.Name)
-            )
-            {
-                if (Stopping) return;
-                if (dicMemDef.TryGetValue(mem.Name, out var defs))
-                    defs.Add(MemberDefinition(mem));
-                else
-                    dicMemDef.Add(mem.Name, [MemberDefinition(mem)]);
-            }
-            foreach (var mem in dicMemDef)
-                propertyResults.Properties.Add(new PSNoteProperty(mem.Key, mem.Value));
-            WritePropertyObject(propertyResults, path);
-        }
-    }
 
     private string MemberDefinition(MemberInfo mem)
     {
@@ -327,10 +303,10 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 
     static Lazy<Dictionary<Type, string>> TypeAccelerators = new(() =>
     {
-        Type TypeAccelerators = typeof(PSObject).Assembly.GetType("System.Management.Automation.TypeAccelerators");
-        var GetProp = TypeAccelerators.GetProperty("Get");
-        var getgetMethod = GetProp.GetGetMethod();
-        var dicUnknown = getgetMethod.Invoke(null, null);
+        Type TypeAccelerators = typeof(PSObject).Assembly.GetType("System.Management.Automation.TypeAccelerators", false);
+        var GetProp = TypeAccelerators?.GetProperty("Get");
+        var getgetMethod = GetProp?.GetGetMethod();
+        var dicUnknown = getgetMethod?.Invoke(null, null);
         Dictionary<string, Type> dic = (Dictionary<string, Type>)dicUnknown; //  TypeAccelerators.InvokeMember("get_Get", BindingFlags.Static | BindingFlags.InvokeMethod, null, null, null);
 
         Dictionary<Type, string> ret = new();
@@ -354,10 +330,67 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
             return typ.ToString();
     }
 
-    public object? GetPropertyDynamicParameters(string path, Collection<string>? providerSpecificPickList)
+    public void GetProperty(string path, Collection<string>? providerSpecificPickList)
     {
-        return null;
+        if (!IsItemContainer(path))
+        {
+            var getPropertyDynamic = DynamicParameters as GetPropertyDynamicParameter;
+
+            var t = FindType(path);
+
+            var propertyResults = new PSObject();
+            var dicProps = new Dictionary<string, List<object>>();
+
+            // Defaults to members
+            if (getPropertyDynamic?.Attributes != true && getPropertyDynamic?.Interfaces != true && getPropertyDynamic?.EnumValues != true
+            || getPropertyDynamic?.Members == true)
+            {
+                foreach (var mem in t.GetMembers().OrderBy(m => m.Name))
+                {
+                    if (Stopping) return;
+                    if (dicProps.TryGetValue(mem.Name, out var defs))
+                        defs.Add(MemberDefinition(mem));
+                    else
+                        dicProps.Add(mem.Name, [MemberDefinition(mem)]);
+                }
+            }
+            if (getPropertyDynamic?.Interfaces == true)
+            {
+                foreach (var iface in t.GetInterfaces().OrderBy(m => m.Name))
+                {
+                    if (Stopping) return;
+                    dicProps.Add(iface.Name, iface.GetMembers().Select(m => MemberDefinition(m)).ToList<object>());
+                }
+            }
+            if (getPropertyDynamic?.Attributes == true)
+            {
+                foreach (var att in t.GetCustomAttributes().OrderBy(m => m.TypeId))
+                {
+                    if (Stopping) return;
+                    dicProps.Add(att.TypeId?.ToString() ?? "unknownAtttribut", [att]);
+                }
+            }
+            if (getPropertyDynamic?.EnumValues == true)
+            {
+                foreach (var enumitem in t.GetEnumValues())
+                {
+                    if (Stopping) return;
+                    dicProps.Add(enumitem.ToString()!, [(int)enumitem]);
+                }
+            }
+
+
+            foreach (var mem in dicProps.Where(m => providerSpecificPickList == null
+                                        || providerSpecificPickList.Count == 0
+                                        || providerSpecificPickList.Contains("*")
+                                        || providerSpecificPickList.Contains(m.Key)))
+                propertyResults.Properties.Add(new PSNoteProperty(mem.Key, mem.Value));
+            WritePropertyObject(propertyResults, path);
+        }
     }
+
+    public object? GetPropertyDynamicParameters(string path, Collection<string>? providerSpecificPickList)
+        => new GetPropertyDynamicParameter();
 
     public void SetProperty(string path, PSObject propertyValue)
     {
@@ -380,4 +413,39 @@ public class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
     }
 
     #endregion
+
+    internal class NewDriveDynamicParameter
+    {
+        /// <summary>
+        /// AppDomain which contains the Types [AppDomain]::CurrentDomain
+        /// </summary>
+        [Parameter(Mandatory = true)]
+        public AppDomain PowerShellAppDomain { get; set; }
+    }
+
+    internal class InvokeDefaultActionDynamicParameter
+    {
+        /// <summary>
+        /// Constructor Arguments
+        /// </summary>
+        [Parameter(Position = 0, HelpMessage = "Constructor Arguments")]
+        public object[]? Arguments { get; set; }
+    }
+
+    internal class GetPropertyDynamicParameter
+    {
+
+        [Parameter]
+        public SwitchParameter Members { get; set; }
+
+        [Parameter]
+        public SwitchParameter Interfaces { get; set; }
+
+        [Parameter]
+        public SwitchParameter Attributes { get; set; }
+
+        [Parameter]
+        public SwitchParameter EnumValues { get; set; }
+
+    }
 }

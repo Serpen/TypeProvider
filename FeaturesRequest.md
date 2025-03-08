@@ -2,6 +2,9 @@
 - Interfaces
 - Attributes
 - Inheritance
+- Generics
+- Nested Types
+- Enums
 
 # Invoke
 Constructor
