@@ -11,8 +11,8 @@ namespace Alibaba1234 {
 }
 "@
         Import-Module "./bin/Debug/net9.0/TypeProvider.dll"
-        New-PSDrive -Name types -PSProvider TypeProvider -Root "" -pow ([System.AppDomain]::CurrentDomain)
-        New-PSDrive -Name SystemIO -PSProvider TypeProvider -Root "System.IO" -pow ([System.AppDomain]::CurrentDomain)
+        New-PSDrive -Name types -PSProvider TypeProvider -Root ""
+        New-PSDrive -Name SystemIO -PSProvider TypeProvider -Root "System.IO"
     }
 
     AfterAll {

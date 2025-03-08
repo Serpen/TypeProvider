@@ -20,9 +20,6 @@ namespace Serpen.PS;
 [OutputType(typeof(Type), ProviderCmdlet = ProviderCmdlet.GetItem)]
 public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProvider
 {
-    protected override object NewDriveDynamicParameters()
-        => new NewDriveDynamicParameter();
-
     protected override PSDriveInfo NewDrive(PSDriveInfo drive)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {drive}");
@@ -32,67 +29,61 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         if (drive.Root != "" && !IsItemContainer(drive.Root))
             throw new DriveNotFoundException("Unable to create a drive with the specified root. The root path does not exist.");
 
-        if (DynamicParameters is NewDriveDynamicParameter newDriveDynamicParameter)
-            if (newDriveDynamicParameter.PowerShellAppDomain != null)
-                AppDomain = newDriveDynamicParameter.PowerShellAppDomain;
-
-        // AppDomain = AppDomain.CurrentDomain;
-
-        GenerateNamespaces();
-
-        AppDomain.AssemblyLoad += onLoadAssembly;
-
         return base.NewDrive(drive);
     }
 
     protected override ProviderInfo Start(ProviderInfo providerInfo)
     {
+        GenerateNamespaces();
+
+        AppDomain.AssemblyLoad += onLoadAssembly;
 
         return base.Start(providerInfo);
     }
 
     #region Native
 
-    static AppDomain? AppDomain;
+    static readonly AppDomain AppDomain = AppDomain.CurrentDomain;
     static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssemblies = [];
     static internal IOrderedEnumerable<string> rootNamespaces;
 
+    static object LockgenNs = new object();
     private void GenerateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        assemblies ??= AppDomain!.GetAssemblies();
-        WriteVerbose($"{nameof(GenerateNamespaces)} for {assemblies.Count()} assemblies");
-
-        // System.Threading.Tasks.Parallel.ForEach(assemblies, ass => 
-        foreach (var ass in assemblies)
+        lock (LockgenNs) // didnt work as intended
         {
-            var asns = ass.GetExportedTypes()
-                .DistinctBy(t => t.Namespace ?? "")
-                .SelectMany(s => getNsParts(s.Namespace ?? ""));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            assemblies ??= AppDomain.GetAssemblies();
+            WriteVerbose($"{nameof(GenerateNamespaces)} for {assemblies.Count()} assemblies");
 
-            foreach (var ns in asns)
+            // System.Threading.Tasks.Parallel.ForEach(assemblies, ass => 
+            foreach (var ass in assemblies)
             {
-                if (Stopping) return;
-                if (NamespacesInAssemblies.TryGetValue(ns, out var ns2))
+                var asns = ass.GetExportedTypes()
+                    .DistinctBy(t => t.Namespace ?? "")
+                    .SelectMany(s => getNsParts(s.Namespace ?? ""));
+
+                foreach (var ns in asns)
                 {
-                    if (!ns2.Contains(ass))
-                        ns2.Add(ass);
+                    if (Stopping) return;
+                    if (NamespacesInAssemblies.TryGetValue(ns, out var ns2))
+                    {
+                        if (!ns2.Contains(ass))
+                            ns2.Add(ass);
+                    }
+                    else
+                        NamespacesInAssemblies.Add(ns, [ass]);
                 }
-                else
-                    NamespacesInAssemblies.Add(ns, [ass]);
+                // });
             }
-            // });
+
+            rootNamespaces = NamespacesInAssemblies.Keys
+                    .Where(n => !String.IsNullOrEmpty(n))
+                    .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
+                    .Distinct()
+                    .Order();
+            WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
         }
-
-        WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
-
-        rootNamespaces = NamespacesInAssemblies.Keys
-                .Where(n => !String.IsNullOrEmpty(n))
-                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
-                .Distinct()
-                .Order();
-        WriteVerbose($"generateNamespaces+Root took {sw.ElapsedMilliseconds}");
-
     }
 
     IEnumerable<string> getNsParts(string ns)
@@ -419,15 +410,6 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     }
 
     #endregion
-
-    internal class NewDriveDynamicParameter
-    {
-        /// <summary>
-        /// AppDomain which contains the Types [AppDomain]::CurrentDomain
-        /// </summary>
-        [Parameter(Mandatory = true)]
-        public AppDomain PowerShellAppDomain { get; set; }
-    }
 
     internal class InvokeDefaultActionDynamicParameter
     {
