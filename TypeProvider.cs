@@ -6,6 +6,7 @@ using System.Management.Automation.Provider;
 using System.Reflection;
 using System;
 using System.Text;
+using MethodBase = System.Reflection.MethodBase;
 
 namespace Serpen.PS;
 
@@ -24,6 +25,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override PSDriveInfo NewDrive(PSDriveInfo drive)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {drive}");
         if (drive == null)
             throw new ArgumentNullException(nameof(drive));
 
@@ -52,6 +54,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         assemblies ??= AppDomain!.GetAssemblies();
+        WriteVerbose($"{nameof(GenerateNamespaces)} for {assemblies.Count()} assemblies");
 
         foreach (var ass in assemblies)
         {
@@ -77,11 +80,12 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             }
         }
         sw.Stop();
-        // WriteWarning($"generateNamespaces took {sw.ElapsedMilliseconds}");
+        WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
     }
 
     IEnumerable<string> getNsParts(string ns)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {ns}");
         for (int i = 1; i < ns.Length - 1; i++)
             if (ns[i] == '.')
                 yield return ns.Substring(0, i);
@@ -90,13 +94,15 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     private void onLoadAssembly(object? sender, AssemblyLoadEventArgs args)
     {
-        WriteVerbose("LoadAssembly:" + args.LoadedAssembly.GetName().Name);
+        WriteVerbose($"{nameof(onLoadAssembly)} {args.LoadedAssembly.GetName().Name}");
         GenerateNamespaces([args.LoadedAssembly]);
     }
 
     private string toNamespacePath(string path)
     {
-        return path.Replace(base.ItemSeparator, '.').TrimEnd('.');
+        string ret = path.Replace(base.ItemSeparator, '.').TrimEnd('.');
+        WriteDebug($"{nameof(toNamespacePath)} {path} -> {ret}");
+        return ret;
     }
 
     #endregion
@@ -104,11 +110,13 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override bool IsItemContainer(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         return NamespacesInAssembly.ContainsKey(toNamespacePath(path));
     }
 
     protected override void GetChildItems(string path, bool recurse)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (path == "")
         {
             var rootNs = NamespacesInAssembly.Keys
@@ -148,6 +156,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override void GetChildNames(string path, ReturnContainers returnContainers)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (path == "")
         {
             var rootNs = NamespacesInAssembly.Keys
@@ -183,6 +192,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override string GetChildName(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (path != "")
             return base.GetChildName(path);
         return "";
@@ -190,6 +200,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     IEnumerable<Type> GetTypes(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         string ns = toNamespacePath(path);
         if (NamespacesInAssembly.TryGetValue(ns, out var relAss))
             return new List<Assembly>(relAss)
@@ -203,6 +214,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override bool ItemExists(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (NamespacesInAssembly.ContainsKey(toNamespacePath(path)))
             return true;
 
@@ -215,6 +227,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     // Searching the Namespaces Assembly List for that name
     Type FindType(string pspath)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {pspath}");
         Type? retType = Type.GetType(toNamespacePath(pspath), false, true);
 
         if (retType == null)
@@ -232,6 +245,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override void GetItem(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (IsItemContainer(path))
             WriteItemObject(new NamespaceType(path), path, true);
         else
@@ -240,11 +254,13 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override bool HasChildItems(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         return NamespacesInAssembly.ContainsKey(toNamespacePath(path));
     }
 
     protected override bool IsValidPath(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         return true;
     }
 
@@ -252,6 +268,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     protected override void InvokeDefaultAction(string path)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         object[] argArray = [];
         var typ = FindType(path);
         if (DynamicParameters is InvokeDefaultActionDynamicParameter invokeParams)
@@ -270,6 +287,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     private string MemberDefinition(MemberInfo mem)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {mem.Name}");
         var sb = new StringBuilder();
         if (mem is MethodInfo metInfo)
         {
@@ -323,7 +341,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     string GetTypeAccelerated(Type typ)
     {
-        //[psobject].assembly.gettype("System.Management.Automation.TypeAccelerators")::Get
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {typ}");
         if (TypeAccelerators.Value.TryGetValue(typ, out var retstring))
             return retstring;
         else
@@ -332,6 +350,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     public void GetProperty(string path, Collection<string>? providerSpecificPickList)
     {
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         if (!IsItemContainer(path))
         {
             var getPropertyDynamic = DynamicParameters as GetPropertyDynamicParameter;
