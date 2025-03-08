@@ -24,7 +24,7 @@ public class NamespaceType
         get
         {
             if (!FullName.Contains('.'))
-                return "";
+                return null;
             else
                 return FullName.Substring(0, FullName.LastIndexOf('.'));
         }
@@ -32,7 +32,7 @@ public class NamespaceType
     public string TypeType { get; } = "Namespace";
 
     public IEnumerable<System.Reflection.Assembly> Assembly
-        => TypeProvider.NamespacesInAssembly[FullName];
+        => TypeProvider.NamespacesInAssemblies[FullName];
 
     public override string ToString() => FullName;
 }

@@ -9,29 +9,39 @@
       <TypeName>System.RuntimeType</TypeName>
       <TypeName>Serpen.PS.NamespaceType</TypeName>
     </ViewSelectedBy>
+    <GroupBy>
+        <PropertyName>Namespace</PropertyName>
+        <Label>Namespace</Label>
+    </GroupBy>
     <TableControl>
       <TableHeaders>
         <TableColumnHeader>
-          <Width>30</Width>
-        </TableColumnHeader>
-        <TableColumnHeader>
-          <Width>30</Width>
-        </TableColumnHeader>
-        <TableColumnHeader>
           <Label>TypeType</Label>
+          <Width>12</Width>
+        </TableColumnHeader>
+        <TableColumnHeader>
+          <Width>40</Width>
+        </TableColumnHeader>
+        <!-- <TableColumnHeader>
+          <Width>20</Width>
+        </TableColumnHeader> -->
+        <TableColumnHeader>
         </TableColumnHeader>
       </TableHeaders>
       <TableRowEntries>
         <TableRowEntry>
           <TableColumnItems>
             <TableColumnItem>
+              <PropertyName>TypeType</PropertyName>
+            </TableColumnItem>
+            <TableColumnItem>
               <PropertyName>Name</PropertyName>
             </TableColumnItem>
-            <TableColumnItem>
+            <!-- <TableColumnItem>
               <PropertyName>Namespace</PropertyName>
-            </TableColumnItem>
+            </TableColumnItem> -->
             <TableColumnItem>
-              <PropertyName>TypeType</PropertyName>
+              <PropertyName>Assembly</PropertyName>
             </TableColumnItem>
           </TableColumnItems>
         </TableRowEntry>

@@ -36,7 +36,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             if (newDriveDynamicParameter.PowerShellAppDomain != null)
                 AppDomain = newDriveDynamicParameter.PowerShellAppDomain;
 
-        AppDomain = AppDomain.CurrentDomain;
+        // AppDomain = AppDomain.CurrentDomain;
 
         GenerateNamespaces();
 
@@ -45,10 +45,17 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         return base.NewDrive(drive);
     }
 
+    protected override ProviderInfo Start(ProviderInfo providerInfo)
+    {
+
+        return base.Start(providerInfo);
+    }
+
     #region Native
 
     static AppDomain? AppDomain;
-    static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssembly = [];
+    static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssemblies = [];
+    static internal IOrderedEnumerable<string> rootNamespaces;
 
     private void GenerateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
@@ -56,36 +63,41 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         assemblies ??= AppDomain!.GetAssemblies();
         WriteVerbose($"{nameof(GenerateNamespaces)} for {assemblies.Count()} assemblies");
 
+        // System.Threading.Tasks.Parallel.ForEach(assemblies, ass => 
         foreach (var ass in assemblies)
         {
-            var asns = new List<string>();
-            foreach (var typ in ass.GetExportedTypes())
-            {
-                if (Stopping) return;
-                if (!asns.Contains(typ.Namespace ?? ""))
-                    foreach (var nsPart in getNsParts(typ.Namespace ?? ""))
-                        asns.Add(nsPart);
-            }
+            var asns = ass.GetExportedTypes()
+                .DistinctBy(t => t.Namespace ?? "")
+                .SelectMany(s => getNsParts(s.Namespace ?? ""));
 
             foreach (var ns in asns)
             {
                 if (Stopping) return;
-                if (NamespacesInAssembly.TryGetValue(ns, out var ns2))
+                if (NamespacesInAssemblies.TryGetValue(ns, out var ns2))
                 {
                     if (!ns2.Contains(ass))
                         ns2.Add(ass);
                 }
                 else
-                    NamespacesInAssembly.Add(ns, [ass]);
+                    NamespacesInAssemblies.Add(ns, [ass]);
             }
+            // });
         }
-        sw.Stop();
+
         WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
+
+        rootNamespaces = NamespacesInAssemblies.Keys
+                .Where(n => !String.IsNullOrEmpty(n))
+                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
+                .Distinct()
+                .Order();
+        WriteVerbose($"generateNamespaces+Root took {sw.ElapsedMilliseconds}");
+
     }
 
     IEnumerable<string> getNsParts(string ns)
     {
-        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {ns}");
+        // parallel error -> WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {ns}");
         for (int i = 1; i < ns.Length - 1; i++)
             if (ns[i] == '.')
                 yield return ns.Substring(0, i);
@@ -111,82 +123,56 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     protected override bool IsItemContainer(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        return NamespacesInAssembly.ContainsKey(toNamespacePath(path));
+        return NamespacesInAssemblies.ContainsKey(toNamespacePath(path));
     }
 
     protected override void GetChildItems(string path, bool recurse)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        if (path == "")
-        {
-            var rootNs = NamespacesInAssembly.Keys
-                .Where(n => !String.IsNullOrEmpty(n))
-                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
-                .Distinct()
-                .Order();
-            foreach (var ns in rootNs)
-            {
-                if (Stopping) return;
-                WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
-                if (recurse)
-                    GetChildItems(ns, recurse);
-            }
-            foreach (var item in GetTypes(path))
-            {
-                if (Stopping) return;
-                WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
-            }
-        }
+
+        IOrderedEnumerable<string> namespaces;
+        if (string.IsNullOrWhiteSpace(path))
+            namespaces = rootNamespaces;
         else
+            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order();
+
+        foreach (var ns in namespaces)
         {
-            foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order())
-            {
-                if (Stopping) return;
-                WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
-                if (recurse)
-                    GetChildItems(ns, recurse);
-            }
-            foreach (var item in GetTypes(path))
-            {
-                if (Stopping) return;
-                WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
-            }
+            if (Stopping) return;
+            WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
         }
+
+        foreach (var item in GetTypes(path))
+        {
+            if (Stopping) return;
+            WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
+        }
+
+        // doppelt
+        if (recurse)
+            foreach (var ns in namespaces)
+                GetChildItems(ns, recurse);
     }
 
     protected override void GetChildNames(string path, ReturnContainers returnContainers)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        if (path == "")
-        {
-            var rootNs = NamespacesInAssembly.Keys
-                .Where(n => !String.IsNullOrEmpty(n))
-                .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
-                .Distinct()
-                .Order();
-            foreach (var ns in rootNs)
-            {
-                if (Stopping) return;
-                WriteItemObject(new NamespaceType(ns).Name, ns, true);
-            }
-            foreach (var item in GetTypes(path))
-            {
-                if (Stopping) return;
-                WriteItemObject(item.Name, item.Name, false);
-            }
-        }
+
+        IOrderedEnumerable<string> namespaces;
+        if (string.IsNullOrWhiteSpace(path))
+            namespaces = rootNamespaces;
         else
+            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order();
+
+        foreach (var ns in namespaces)
         {
-            foreach (var ns in NamespacesInAssembly.Keys.Where(ns => ns.StartsWith(toNamespacePath(path))))
-            {
-                if (Stopping) return;
-                WriteItemObject(new NamespaceType(ns.Replace(toNamespacePath(path) + '.', "")).Name, ns.Replace(toNamespacePath(path) + '.', ""), true);
-            }
-            foreach (var item in GetTypes(path))
-            {
-                if (Stopping) return;
-                WriteItemObject(item.Name, item.Name, false);
-            }
+            if (Stopping) return;
+            WriteItemObject(new NamespaceType(ns).Name, ns, true);
+        }
+        foreach (var item in GetTypes(path))
+        {
+            if (Stopping) return;
+            WriteItemObject(item.Name, item.Name, false);
         }
     }
 
@@ -202,7 +188,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         string ns = toNamespacePath(path);
-        if (NamespacesInAssembly.TryGetValue(ns, out var relAss))
+        if (NamespacesInAssemblies.TryGetValue(ns, out var relAss))
             return new List<Assembly>(relAss)
                 .SelectMany(a => this.Force ? a.GetTypes() : a.GetExportedTypes())
                 // .ToArray()
@@ -215,7 +201,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     protected override bool ItemExists(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        if (NamespacesInAssembly.ContainsKey(toNamespacePath(path)))
+        if (NamespacesInAssemblies.ContainsKey(toNamespacePath(path)))
             return true;
 
         if (FindType(path) != null)
@@ -230,10 +216,11 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {pspath}");
         Type? retType = Type.GetType(toNamespacePath(pspath), false, true);
 
+        // AssemblyQualifiedName is needed for resolve, so search in all assemblies that contain parent NS
         if (retType == null)
         {
             var parentNs = toNamespacePath(GetParentPath(pspath, ""));
-            if (NamespacesInAssembly.TryGetValue(parentNs, out var asslist))
+            if (NamespacesInAssemblies.TryGetValue(parentNs, out var asslist))
             {
                 retType = asslist
                     .SelectMany(a => a.GetExportedTypes())
@@ -255,7 +242,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     protected override bool HasChildItems(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        return NamespacesInAssembly.ContainsKey(toNamespacePath(path));
+        return NamespacesInAssemblies.ContainsKey(toNamespacePath(path));
     }
 
     protected override bool IsValidPath(string path)
