@@ -111,7 +111,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     private string toNamespacePath(string path)
     {
-        string ret = path.Replace('\\', '.').TrimEnd('.');
+        string ret = path.Replace(System.IO.Path.DirectorySeparatorChar, '.').TrimEnd('.');
         WriteDebug($"toNamespacePath {path} -> {ret}");
         return ret;
     }
@@ -141,14 +141,14 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         {
             WriteDebug($"ns: {ns}");
             if (Stopping) return;
-            WriteItemObject(new NamespaceType(ns), ns.Replace('.', '\\'), true);
+            WriteItemObject(new NamespaceType(ns), ns.Replace('.', System.IO.Path.DirectorySeparatorChar), true);
         }
 
         foreach (var item in GetTypes(path))
         {
             if (Stopping) return;
             // BUG: Nested FullName != NS.Name, maybe not my bug, insted a dotnet or pwsh
-            WriteItemObject(item, item.FullName.Replace('.', '\\'), false);
+            WriteItemObject(item, item.FullName.Replace('.', System.IO.Path.DirectorySeparatorChar), false);
         }
 
         // doppelt
