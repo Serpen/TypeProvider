@@ -3,7 +3,7 @@
 <Configuration>
 <ViewDefinitions>
   <View>
-    <Name>Type</Name>
+    <Name>TypeInfoGrouped</Name>
     <ViewSelectedBy>
       <TypeName>System.Type</TypeName>
       <TypeName>System.RuntimeType</TypeName>
@@ -16,15 +16,11 @@
     <TableControl>
       <TableHeaders>
         <TableColumnHeader>
-          <Label>TypeType</Label>
           <Width>12</Width>
         </TableColumnHeader>
         <TableColumnHeader>
           <Width>40</Width>
         </TableColumnHeader>
-        <!-- <TableColumnHeader>
-          <Width>20</Width>
-        </TableColumnHeader> -->
         <TableColumnHeader>
         </TableColumnHeader>
       </TableHeaders>
@@ -37,9 +33,45 @@
             <TableColumnItem>
               <PropertyName>Name</PropertyName>
             </TableColumnItem>
-            <!-- <TableColumnItem>
-              <PropertyName>Namespace</PropertyName>
-            </TableColumnItem> -->
+            <TableColumnItem>
+              <PropertyName>BaseType</PropertyName>
+            </TableColumnItem>
+          </TableColumnItems>
+        </TableRowEntry>
+      </TableRowEntries>
+    </TableControl>
+  </View>
+  <View>
+    <Name>TypeAssemblyGrouped</Name>
+    <ViewSelectedBy>
+      <TypeName>System.Type</TypeName>
+      <TypeName>System.RuntimeType</TypeName>
+      <TypeName>Serpen.PS.NamespaceType</TypeName>
+    </ViewSelectedBy>
+    <GroupBy>
+        <PropertyName>Namespace</PropertyName>
+        <Label>Namespace</Label>
+    </GroupBy>
+    <TableControl>
+      <TableHeaders>
+        <TableColumnHeader>
+          <Width>12</Width>
+        </TableColumnHeader>
+        <TableColumnHeader>
+          <Width>40</Width>
+        </TableColumnHeader>
+        <TableColumnHeader>
+        </TableColumnHeader>
+      </TableHeaders>
+      <TableRowEntries>
+        <TableRowEntry>
+          <TableColumnItems>
+            <TableColumnItem>
+              <PropertyName>TypeType</PropertyName>
+            </TableColumnItem>
+            <TableColumnItem>
+              <PropertyName>Name</PropertyName>
+            </TableColumnItem>
             <TableColumnItem>
               <PropertyName>Assembly</PropertyName>
             </TableColumnItem>
@@ -48,5 +80,62 @@
       </TableRowEntries>
     </TableControl>
   </View>
+  <View>
+    <Name>TypeInfoNoGroup</Name>
+    <ViewSelectedBy>
+      <TypeName>System.Type</TypeName>
+      <TypeName>System.RuntimeType</TypeName>
+      <TypeName>Serpen.PS.NamespaceType</TypeName>
+    </ViewSelectedBy>
+    <TableControl>
+      <TableHeaders>
+        <TableColumnHeader>
+          <Width>12</Width>
+        </TableColumnHeader>
+        <TableColumnHeader>
+          <Width>60</Width>
+        </TableColumnHeader>
+        <TableColumnHeader>
+        </TableColumnHeader>
+      </TableHeaders>
+      <TableRowEntries>
+        <TableRowEntry>
+          <TableColumnItems>
+            <TableColumnItem>
+              <PropertyName>TypeType</PropertyName>
+            </TableColumnItem>
+            <TableColumnItem>
+              <PropertyName>Fullname</PropertyName>
+            </TableColumnItem>
+            <TableColumnItem>
+              <PropertyName>BaseType</PropertyName>
+            </TableColumnItem>
+          </TableColumnItems>
+        </TableRowEntry>
+      </TableRowEntries>
+    </TableControl>
+  </View>
+  <View>
+    <Name>TypeInfoGrouped</Name>
+    <ViewSelectedBy>
+      <TypeName>System.Type</TypeName>
+      <TypeName>System.RuntimeType</TypeName>
+      <TypeName>Serpen.PS.NamespaceType</TypeName>
+    </ViewSelectedBy>
+    <GroupBy>
+      <PropertyName>Namespace</PropertyName>
+      <Label>Namespace</Label>
+    </GroupBy>
+    <WideControl>
+      <ColumnNumber>6</ColumnNumber>
+      <WideEntries>
+        <WideEntry>
+          <WideItem>
+            <PropertyName>Name</PropertyName>
+          </WideItem>
+        </WideEntry>
+      </WideEntries>
+    </WideControl>
+</View>
 </ViewDefinitions>
 </Configuration>

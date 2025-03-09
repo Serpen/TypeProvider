@@ -22,28 +22,29 @@ REMAINS WITH THE USER.
       <ScriptProperty>
         <Name>TypeType</Name>
         <GetScriptBlock>
-          if($true -or $this.Provider -is [Serpen.PS.TypeProvider])
+          if($this.PSProvider.Name -eq 'TypeProvider')
           {
+            $ret = 'Type'
             if ($this.BaseType?.Name -eq 'Enum') {
-                return 'Enum'
+                $ret = 'Enum'
             } elseif ($this.get_IsInterface()) {
-                return 'Interface'
-            } elseif ($this.get_IsGenericType()) {
-                if ($this.get_IsValueType()) {
-                return 'ValueType&lt;&gt;'
-                } else {
-                return 'Type&lt;&gt;' 
-                }
+                $ret = 'Interface'
             } elseif ($this.IsSubclassOf([System.Exception]) -or $this -is [System.Exception]) {
-                return 'Exception'
+                $ret = 'Exception'
             } elseif ($this.IsSubclassOf([System.Attribute]) -or $this -is [System.Attribute]) {
-                return 'Attribute'
+                $ret = 'Attribute'
+            } elseif ($this.IsSubclassOf([System.Delegate]) -or $this -is [System.Delegate]) {
+                $ret = 'Delegate'
             } elseif ($this.get_IsPrimitive()) {
-                return 'Primitive'
+                $ret = 'Primitive'
             } elseif ($this.get_IsValueType()) {
-                return 'ValueType'
+                $ret = 'ValueType'
+            }
+
+            if ($this.get_IsGenericType()) {
+              return "$ret&lt;&gt;"
             } else {
-                return 'Type'
+              return $ret
             }
           }
         </GetScriptBlock>

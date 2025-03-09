@@ -48,6 +48,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     static internal IOrderedEnumerable<string> rootNamespaces;
 
     static object LockgenNs = new object();
+
     private void GenerateNamespaces(IEnumerable<Assembly>? assemblies = null)
     {
         lock (LockgenNs) // didnt work as intended
@@ -78,15 +79,13 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             }
 
             rootNamespaces = NamespacesInAssemblies.Keys
-                    .Where(n => !String.IsNullOrEmpty(n))
-                    .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
-                    .Distinct()
+                    .DistinctBy(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
                     .Order();
             WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
         }
     }
 
-    IEnumerable<string> getNsParts(string ns)
+    static IEnumerable<string> getNsParts(string ns)
     {
         // parallel error -> WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {ns}");
         for (int i = 1; i < ns.Length - 1; i++)
@@ -104,7 +103,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     private string toNamespacePath(string path)
     {
         string ret = path.Replace(base.ItemSeparator, '.').TrimEnd('.');
-        WriteDebug($"{nameof(toNamespacePath)} {path} -> {ret}");
+        WriteDebug($"toNamespacePath {path} -> {ret}");
         return ret;
     }
 
@@ -114,6 +113,8 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     protected override bool IsItemContainer(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
+        if (String.IsNullOrEmpty(path))
+            return true;
         return NamespacesInAssemblies.ContainsKey(toNamespacePath(path));
     }
 
@@ -181,7 +182,15 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         string ns = toNamespacePath(path);
         if (NamespacesInAssemblies.TryGetValue(ns, out var relAss))
             return new List<Assembly>(relAss)
-                .SelectMany(a => this.Force ? a.GetTypes() : a.GetExportedTypes())
+                .SelectMany(a =>
+                {
+                    try { return this.Force ? a.GetTypes() : a.GetExportedTypes(); }
+                    catch (Exception e)
+                    {
+                        WriteError(new ErrorRecord(e, "ExportTypes", ErrorCategory.MetadataError, a));
+                        return System.Array.Empty<Type>();
+                    }
+                })
                 // .ToArray()
                 .Where(t => t.Namespace == ns || ns == "" && t.Namespace == null)
                 .OrderBy(t => t.Name);
@@ -192,39 +201,47 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     protected override bool ItemExists(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        if (NamespacesInAssemblies.ContainsKey(toNamespacePath(path)))
+        string nsPath = toNamespacePath(path);
+        if (String.IsNullOrEmpty(path))
             return true;
-
-        if (FindType(path) != null)
+        if (NamespacesInAssemblies.ContainsKey(nsPath))
+            return true;
+        if (FindType(nsPath, true) != null)
             return true;
         return false;
     }
 
     // Only Types within same assembly can be found by nameonly
     // Searching the Namespaces Assembly List for that name
-    Type FindType(string pspath)
+    Type FindType(string path, bool pathIsNative = false)
     {
-        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {pspath}");
-        Type? retType = Type.GetType(toNamespacePath(pspath), false, true);
+        string nsPath = path;
+        if (!pathIsNative)
+            nsPath = toNamespacePath(path);
+        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
+        Type? retType = Type.GetType(nsPath, false, true);
 
         // AssemblyQualifiedName is needed for resolve, so search in all assemblies that contain parent NS
         if (retType == null)
         {
-            var parentNs = toNamespacePath(GetParentPath(pspath, ""));
+            var parentNs = toNamespacePath(GetParentPath(path, ""));
             if (NamespacesInAssemblies.TryGetValue(parentNs, out var asslist))
             {
                 retType = asslist
                     .SelectMany(a => a.GetExportedTypes())
-                    .FirstOrDefault(t => t.FullName == toNamespacePath(pspath));
+                    .FirstOrDefault(t => t.FullName == nsPath);
             }
         }
+
         return retType;
     }
 
     protected override void GetItem(string path)
     {
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
-        if (IsItemContainer(path))
+        if (string.IsNullOrEmpty(path)) {
+
+        } else if (IsItemContainer(path))
             WriteItemObject(new NamespaceType(path), path, true);
         else
             WriteItemObject(FindType(path), path, false);
@@ -253,7 +270,9 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             argArray = invokeParams.Arguments ?? [];
 
         var instance = System.Activator.CreateInstance(typ, argArray);
-        this.WriteItemObject(instance, path, false);
+
+        // WriteItemObject is not the best choice WriteOutput would be better
+        this.WriteItemObject(instance, path + ".ctor()", false);
     }
 
     protected override object InvokeDefaultActionDynamicParameters(string path)
@@ -263,9 +282,9 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     #region Property
 
-    private string MemberDefinition(MemberInfo mem)
+    static string MemberDefinition(MemberInfo mem)
     {
-        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {mem.Name}");
+        // WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {mem.Name}");
         var sb = new StringBuilder();
         if (mem is MethodInfo metInfo)
         {
@@ -282,6 +301,21 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             sb.Append(GetTypeAccelerated(propInfo.PropertyType));
             sb.Append(' ');
             sb.Append(mem.Name);
+            sb.Append(" {");
+            if (propInfo.CanRead) sb.Append("get;");
+            if (propInfo.CanWrite) sb.Append("set;");
+            sb.Append('}');
+        }
+        else if (mem is System.Reflection.EventInfo eventInfo)
+        {
+            sb.Append("event ");
+            sb.Append(eventInfo.EventHandlerType);
+            sb.Append(' ');
+            sb.Append(mem.Name);
+            sb.Append('(');
+            // sb.Append(String.Join(',', eventInfo.g
+            //     .Select(p => $"{GetTypeAccelerated(p.ParameterType)} {p.Name}")));
+            sb.Append(')');
         }
         else if (mem is ConstructorInfo conInfo)
         {
@@ -292,6 +326,8 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         }
         else
         {
+            sb.Append(mem.MemberType);
+            sb.Append(' ');
             sb.Append(mem.Name);
         }
         return sb.ToString();
@@ -317,9 +353,9 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     );
 
-    string GetTypeAccelerated(Type typ)
+    static string GetTypeAccelerated(Type typ)
     {
-        WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {typ}");
+        //WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {typ}");
         if (TypeAccelerators.Value.TryGetValue(typ, out var retstring))
             return retstring;
         else
@@ -345,10 +381,13 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
                 foreach (var mem in t.GetMembers().OrderBy(m => m.Name))
                 {
                     if (Stopping) return;
-                    if (dicProps.TryGetValue(mem.Name, out var defs))
-                        defs.Add(MemberDefinition(mem));
-                    else
-                        dicProps.Add(mem.Name, [MemberDefinition(mem)]);
+                    if (!mem.Name.StartsWith("get_") && !mem.Name.StartsWith("set_") && !(mem is MethodInfo mi && mi.IsSpecialName))
+                    {
+                        if (dicProps.TryGetValue(mem.Name, out var defs))
+                            defs.Add(MemberDefinition(mem));
+                        else
+                            dicProps.Add(mem.Name, [MemberDefinition(mem)]);
+                    }
                 }
             }
             if (getPropertyDynamic?.Interfaces == true)
@@ -361,7 +400,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             }
             if (getPropertyDynamic?.Attributes == true)
             {
-                foreach (var att in t.GetCustomAttributes().OrderBy(m => m.TypeId))
+                foreach (var att in t.GetCustomAttributes()/* .OrderBy(m => m.TypeId ?? "") */)
                 {
                     if (Stopping) return;
                     dicProps.Add(att.TypeId?.ToString() ?? "unknownAtttribut", [att]);
@@ -382,7 +421,8 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
                                         || providerSpecificPickList.Contains("*")
                                         || providerSpecificPickList.Contains(m.Key)))
                 propertyResults.Properties.Add(new PSNoteProperty(mem.Key, mem.Value));
-            WritePropertyObject(propertyResults, path);
+            if (propertyResults.Properties.Count() > 0)
+                WritePropertyObject(propertyResults, path);
         }
     }
 

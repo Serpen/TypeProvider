@@ -1,8 +1,13 @@
-Import-Module Pester
-Update-TypeData .\PSTypeProvider.types.ps1xml
-Update-FormatData .\PSTypeProvider.format.ps1xml
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module Microsoft.PowerShell.Management
+Remove-Module PSReadLine
+
+Import-Module .\PSTypeProvider.psd1
+# Update-TypeData -PrependPath $PSScriptRoot\PSTypeProvider.types.ps1xml
+# Update-FormatData $PSScriptRoot\PSTypeProvider.format.ps1xml
 $VerbosePreference = 'Continue'
-Import-Module "./bin/Debug/net9.0/TypeProvider.dll"
+#$DebugPreference = 'Continue'
+# Import-Module "$PSScriptRoot/bin/Debug/net9.0/TypeProvider.dll"
 New-PSDrive -Name types -PSProvider TypeProvider -Root "" # -pow ([System.AppDomain]::CurrentDomain)
 New-PSDrive -Name SystemIO -PSProvider TypeProvider -Root "System.IO" # -pow ([System.AppDomain]::CurrentDomain)
 
