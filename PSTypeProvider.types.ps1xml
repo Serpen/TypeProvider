@@ -25,7 +25,7 @@ REMAINS WITH THE USER.
           if($this.PSProvider.Name -eq 'TypeProvider')
           {
             $ret = 'Type'
-            if ($this.BaseType?.Name -eq 'Enum') {
+            if ($this.BaseType.Name -eq 'Enum') {
                 $ret = 'Enum'
             } elseif ($this.get_IsInterface()) {
                 $ret = 'Interface'

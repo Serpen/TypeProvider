@@ -12,7 +12,7 @@ public class NamespaceType
     {
         get
         {
-            if (!FullName.Contains('.'))
+            if (!FullName.Contains("."))
                 return FullName;
             else
                 return FullName.Substring(FullName.LastIndexOf('.') + 1);
@@ -23,7 +23,7 @@ public class NamespaceType
     {
         get
         {
-            if (!FullName.Contains('.'))
+            if (!FullName.Contains("."))
                 return null;
             else
                 return FullName.Substring(0, FullName.LastIndexOf('.'));

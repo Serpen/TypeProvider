@@ -2,36 +2,40 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": ".NET Core Launch pwsh",
+            "name": "Launch PS5.1",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "powershell",
+            // "program": "D:/ps75/pwsh.exe",
+            // "program": "d:/Downloads/JDownloads/PowerShell-7 2 0-win-x64/pwsh.exe",
+            "args": ["-NoProfile", "-NoExit", "-File", "${workspaceFolder}/runProvider.ps1"],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "externalTerminal",
+        },
+        {
+            "name": "Launch PS7.5",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "pwsh",
-            "args": ["-NoExit", "-File", "${workspaceFolder}/provider.ps1"],
+            // "program": "D:/ps75/pwsh.exe",
+            "args": ["-NoProfile", "-NoExit", "-File", "${workspaceFolder}/runProvider.ps1"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
-            "console": "externalTerminal"
+            "console": "externalTerminal",
         },
         {
-            // Use IntelliSense to find out which attributes exist for C# debugging
-            // Use hover for the description of the existing attributes
-            // For further information visit https://github.com/dotnet/vscode-csharp/blob/main/debugger-launchjson.md
-            "name": ".NET Core Launch (console)",
+            "name": "Launch PS6.1",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/bin/Debug/net9.0/TypeProvider.dll",
-            "args": [],
+            "program": "d:/Downloads/JDownloads/PowerShell-6 1 0-win-x64/pwsh.exe",
+            "args": ["-NoProfile", "-NoExit", "-File", "${workspaceFolder}/runProvider.ps1"],
             "cwd": "${workspaceFolder}",
-            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
-            "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "console": "externalTerminal",
         },
-        {
-            "name": ".NET Core Attach",
-            "type": "coreclr",
-            "request": "attach"
-        }
     ]
 }

@@ -44,7 +44,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
     #region Native
 
     static readonly AppDomain AppDomain = AppDomain.CurrentDomain;
-    static internal readonly OrderedDictionary<string, List<Assembly>> NamespacesInAssemblies = [];
+    static internal readonly Dictionary<string, List<Assembly>> NamespacesInAssemblies = [];
     static internal IOrderedEnumerable<string> rootNamespaces;
 
     static object LockgenNs = new object();
@@ -55,14 +55,21 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             assemblies ??= AppDomain.GetAssemblies();
+            // assemblies ??= [typeof(string).Assembly];
             WriteVerbose($"{nameof(GenerateNamespaces)} for {assemblies.Count()} assemblies");
 
             // System.Threading.Tasks.Parallel.ForEach(assemblies, ass => 
             foreach (var ass in assemblies)
             {
+                if (this.Host.Version <= new System.Version("7.3") && ass.IsDynamic) {
+                    WriteWarning($"Skipping Dynamic Assembly: {ass.FullName}");
+                    continue;
+                }
                 var asns = ass.GetExportedTypes()
-                    .DistinctBy(t => t.Namespace ?? "")
-                    .SelectMany(s => getNsParts(s.Namespace ?? ""));
+
+                    .Select(t => t.Namespace ?? "")
+                    .Distinct()
+                    .SelectMany(s => getNsParts(s ?? ""));
 
                 foreach (var ns in asns)
                 {
@@ -79,8 +86,10 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             }
 
             rootNamespaces = NamespacesInAssemblies.Keys
-                    .DistinctBy(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
-                    .Order();
+                    .Where(n => n != "")
+                    .Select(n => n.Substring(0, (n.IndexOf('.') == -1) ? n.Length : n.IndexOf('.')))
+                    .Distinct()
+                    .OrderBy(s => s);
             WriteVerbose($"generateNamespaces took {sw.ElapsedMilliseconds}");
         }
     }
@@ -102,7 +111,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
 
     private string toNamespacePath(string path)
     {
-        string ret = path.Replace(base.ItemSeparator, '.').TrimEnd('.');
+        string ret = path.Replace('\\', '.').TrimEnd('.');
         WriteDebug($"toNamespacePath {path} -> {ret}");
         return ret;
     }
@@ -126,18 +135,19 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         if (string.IsNullOrWhiteSpace(path))
             namespaces = rootNamespaces;
         else
-            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order();
-
+            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).OrderBy(s=>s);
+        WriteDebug($"nses: {namespaces}");
         foreach (var ns in namespaces)
         {
+            WriteDebug($"ns: {ns}");
             if (Stopping) return;
-            WriteItemObject(new NamespaceType(ns), ns.Replace('.', base.ItemSeparator), true);
+            WriteItemObject(new NamespaceType(ns), ns.Replace('.', '\\'), true);
         }
 
         foreach (var item in GetTypes(path))
         {
             if (Stopping) return;
-            WriteItemObject(item, item.FullName.Replace('.', base.ItemSeparator), false);
+            WriteItemObject(item, item.FullName.Replace('.', '\\'), false);
         }
 
         // doppelt
@@ -154,7 +164,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         if (string.IsNullOrWhiteSpace(path))
             namespaces = rootNamespaces;
         else
-            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).Order();
+            namespaces = NamespacesInAssemblies.Keys.Where(ns => ns.StartsWith(toNamespacePath(path) + ".") && (ns.Count(s => s == '.') == (toNamespacePath(path) + ".").Count(s => s == '.'))).OrderBy(s=>s);
 
         foreach (var ns in namespaces)
         {
@@ -206,18 +216,16 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             return true;
         if (NamespacesInAssemblies.ContainsKey(nsPath))
             return true;
-        if (FindType(nsPath, true) != null)
+        if (FindType(path) != null)
             return true;
         return false;
     }
 
     // Only Types within same assembly can be found by nameonly
     // Searching the Namespaces Assembly List for that name
-    Type FindType(string path, bool pathIsNative = false)
+    Type FindType(string path)
     {
-        string nsPath = path;
-        if (!pathIsNative)
-            nsPath = toNamespacePath(path);
+        string nsPath = toNamespacePath(path);
         WriteDebug($"{MethodBase.GetCurrentMethod()?.Name} {path}");
         Type? retType = Type.GetType(nsPath, false, true);
 
@@ -292,7 +300,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             sb.Append(' ');
             sb.Append(mem.Name);
             sb.Append('(');
-            sb.Append(String.Join(',', metInfo.GetParameters()
+            sb.Append(String.Join(",", metInfo.GetParameters()
                 .Select(p => $"{GetTypeAccelerated(p.ParameterType)} {p.Name}")));
             sb.Append(')');
         }
@@ -320,7 +328,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         else if (mem is ConstructorInfo conInfo)
         {
             sb.Append("new(");
-            sb.Append(String.Join(',', conInfo.GetParameters()
+            sb.Append(String.Join(",", conInfo.GetParameters()
                 .Select(p => $"{GetTypeAccelerated(p.ParameterType)} {p.Name}")));
             sb.Append(')');
         }

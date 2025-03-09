@@ -9,7 +9,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'bin\Debug\net9.0\TypeProvider.dll'
+RootModule = 'bin\Debug\netstandard2.0\TypeProvider.dll'
 
 # Version number of this module.
 ModuleVersion = '0.0.1'

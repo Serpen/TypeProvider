@@ -10,13 +10,14 @@ namespace Alibaba1234 {
     }
 }
 "@
-        Import-Module "./bin/Debug/net9.0/TypeProvider.dll"
+        Import-Module $PSScriptRoot\PSTypeProvider.psd1
         New-PSDrive -Name types -PSProvider TypeProvider -Root ""
         New-PSDrive -Name SystemIO -PSProvider TypeProvider -Root "System.IO"
+
     }
 
     AfterAll {
-        Remove-Module TypeProvider
+        Remove-Module PSTypeProvider
     }
 
     It "System Namespace should exist" {
@@ -25,6 +26,11 @@ namespace Alibaba1234 {
     It "System Namespace should have items" {
         Get-Item types:\System | Should -BeOfType 'Serpen.PS.NamespaceType'
     }
+    It "Root should exist" {
+        Test-Path types:\ -PathType Container | Should -BeTrue
+        Test-Path types: -PathType Container | Should -BeTrue
+    }
+
     It "String Class should exist" {
         Test-Path types:\System\String -PathType Leaf | Should -BeTrue
     }
@@ -51,7 +57,10 @@ namespace Alibaba1234 {
     }
 
     It "Root should contain namespaces" {
-        dir types: | ? PSIsContainer | Measure-Object | select -ExpandProperty Count | Should -BeGreaterThan 0
+        dir types:\ | ? PSIsContainer | Measure-Object | Select-Object -ExpandProperty Count | Should -BeGreaterThan 1
+    }
+    It "System should contain namespaces" {
+        dir types:\System | ? PSIsContainer | Measure-Object | Select-Object -ExpandProperty Count | Should -BeGreaterThan 1
     }
 
     It "ForeignAssembly Type" {
