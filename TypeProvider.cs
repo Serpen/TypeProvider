@@ -147,6 +147,7 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
         foreach (var item in GetTypes(path))
         {
             if (Stopping) return;
+            // BUG: Nested FullName != NS.Name, maybe not my bug, insted a dotnet or pwsh
             WriteItemObject(item, item.FullName.Replace('.', '\\'), false);
         }
 
@@ -237,7 +238,10 @@ public sealed class TypeProvider : NavigationCmdletProvider, IPropertyCmdletProv
             {
                 retType = asslist
                     .SelectMany(a => a.GetExportedTypes())
-                    .FirstOrDefault(t => t.FullName == nsPath);
+                    .FirstOrDefault(t =>
+                        t.FullName == nsPath
+                        || t.IsNested && $"{t.Namespace}.{t.Name}" == nsPath
+                    );
             }
         }
 
