@@ -9,7 +9,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'bin\Debug\netstandard2.0\TypeProvider.dll'
+RootModule = '.\PSTypeProvider.psm1'
 
 # Version number of this module.
 ModuleVersion = '0.0.1'
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) Serpen. All rights reserved.'
 
 # Description of the functionality provided by this module
-# Description = ''
+Description = 'PSProvider which allowes navigating through the dotnet namespaces and types '
 
 # Minimum version of the PowerShell engine required by this module
 # PowerShellVersion = ''
@@ -54,19 +54,20 @@ Copyright = '(c) Serpen. All rights reserved.'
 # RequiredModules = @()
 
 # Assemblies that must be loaded prior to importing this module
-# RequiredAssemblies = ''
+# RequiredAssemblies = 'bin\Debug\netstandard2.0\TypeProvider.dll'
 
 # Script files (.ps1) that are run in the caller's environment prior to importing this module.
-# ScriptsToProcess = @()
+ScriptsToProcess = @()
 
 # Type files (.ps1xml) to be loaded when importing this module
 TypesToProcess = 'PSTypeProvider.types.ps1xml'
 
 # Format files (.ps1xml) to be loaded when importing this module
-FormatsToProcess = 'PSTypeProvider.format.ps1xml'
+# Need To Prepend
+# FormatsToProcess = 'PSTypeProvider.format.ps1xml'
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# NestedModules = @()
+NestedModules = @('bin\Debug\netstandard2.0\TypeProvider.dll')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @()

@@ -59,6 +59,9 @@ namespace Alibaba1234 {
     It "Root should contain namespaces" {
         dir types:\ | ? PSIsContainer | Measure-Object | Select-Object -ExpandProperty Count | Should -BeGreaterThan 1
     }
+    It "Dir Provider Root Path" {
+        dir TypeProvider\TypeProvider:: | ? PSIsContainer | Measure-Object | Select-Object -ExpandProperty Count | Should -BeGreaterThan 1
+    }
     It "System should contain namespaces" {
         dir types:\System | ? PSIsContainer | Measure-Object | Select-Object -ExpandProperty Count | Should -BeGreaterThan 1
     }
@@ -69,4 +72,23 @@ namespace Alibaba1234 {
     It "non existing Type" {
         {gi types:\System\Net\HttpStatusCodeAlibaba -ErrorAction Stop} | should -throw
     }
+
+    Context "Properties" {
+        It "String should Contain Chars Definition" {
+            Get-ItemProperty .\System\String Chars | Should -Not -BeNullOrEmpty
+        }
+    }
+    Context "Formating" {
+        It "Definition should exists" {
+            {dir Types: | Format-Table -View TypeInfoGrouped -Force -ea Stop} | Should -not -Throw
+        }
+
+        It "Format Definition should be applied" {
+            $fout = Get-Item Types:\System\String | Format-Table -View TypeInfoNoGroup -AutoSize | Out-String  
+            
+            $fout | Should -Match 'TypeType Fullname      BaseType'
+            $fout | Should -Match '-------- --------      --------'
+            $fout | Should -Match 'Type     System.String System.Object'
+        }
+    }    
 }

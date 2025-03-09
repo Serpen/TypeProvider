@@ -1,13 +1,16 @@
 # ItemProperty
-- Interfaces
-- Attributes
 - Inheritance
 - Generics
 - Nested Types
-- Enums
 
 # Invoke
 Constructor
 
 # Get Acl
 - Public/Privat/Internal
+
+# Colors
+- Color for NS, Exception
+- Constuctor
+- Private/Public
+- Generic
